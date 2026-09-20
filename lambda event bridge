@@ -1,0 +1,84 @@
+provider "aws" {
+  region = "us-east-1"
+}
+
+# -------------------------
+# IAM Role for Lambda
+# -------------------------
+resource "aws_iam_role" "lambda_role" {
+  name = "terraform-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# -------------------------
+# Lambda basic execution policy
+# -------------------------
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# -------------------------
+# Lambda function
+# -------------------------
+resource "aws_lambda_function" "my_lambda" {
+  function_name = "terraform-eventbridge-lambda"
+
+  role = aws_iam_role.lambda_role.arn
+
+  runtime = "python3.12"
+  handler = "lambda_function.lambda_handler"
+
+  filename         = "lambda.zip"
+  source_code_hash = filebase64sha256("lambda.zip")
+}
+
+# -------------------------
+# EventBridge Rule
+# -------------------------
+resource "aws_cloudwatch_event_rule" "every_five_minutes" {
+  name                = "terraform-every-five-minutes"
+  description         = "Trigger Lambda every 5 minutes"
+  schedule_expression = "rate(5 minutes)"
+}
+
+# -------------------------
+# EventBridge Target
+# -------------------------
+resource "aws_cloudwatch_event_target" "lambda_target" {
+  rule = aws_cloudwatch_event_rule.every_five_minutes.name
+
+  target_id = "lambda-target"
+
+  arn = aws_lambda_function.my_lambda.arn
+}
+
+# -------------------------
+# Allow EventBridge to invoke Lambda
+# -------------------------
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id = "AllowEventBridgeInvoke"
+
+  action = "lambda:InvokeFunction"
+
+  function_name = aws_lambda_function.my_lambda.function_name
+
+  principal = "events.amazonaws.com"
+
+  source_arn = aws_cloudwatch_event_rule.every_five_minutes.arn
+}
