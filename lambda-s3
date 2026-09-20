@@ -51,7 +51,7 @@ resource "aws_lambda_function" "my_lambda" {
 
   handler = "app.lambda_handler"
 
-  s3_bucket = aws_s3_bucket.lambda_bucket.bucket
+  s3_bucket = aws_s3_bucket.lambda_bucket.id
 
   s3_key = aws_s3_object.lambda_zip.key
 
